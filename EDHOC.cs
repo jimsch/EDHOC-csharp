@@ -25,10 +25,41 @@ using Org.BouncyCastle.Security;
 using Org.BouncyCastle.Utilities.Encoders;
 
 
-namespace EDHOC
+namespace CoAP.EDHOC
 {
     public class EDHOC
     {
+        class ListKey
+        {
+            private readonly byte[] _bytes;
+
+            public ListKey(byte[] bytesIn)
+            {
+                if (bytesIn == null) throw new ArgumentException();
+                _bytes = bytesIn;
+            }
+
+            public override bool Equals(object obj)
+            {
+                if (obj == null) return false;
+
+                ListKey key2 = (ListKey) obj;
+
+                if (_bytes.Length != key2._bytes.Length) return false;
+                for (int i=0; i<_bytes.Length; i++) if (_bytes[i] != key2._bytes[i]) return false;
+                return true;
+            }
+
+            public override int GetHashCode()
+            {
+                if (_bytes.Length >= 4) {
+                    return _bytes[0] << 24 + _bytes[1] << 16 + _bytes[2] << 8 + _bytes[3];
+                }
+                return _bytes[0];
+            }
+        }
+
+
         Boolean _fSymmetricSecret = false;
         CBORObject[] _kid = new CBORObject[2];
         byte[][] _SessionId = new byte[2][];
@@ -42,7 +73,7 @@ namespace EDHOC
         OneKey _Secret;
         OneKey _SigningKey;
 
-        static Dictionary<byte[], EDHOC> MessageList = new Dictionary<byte[], EDHOC>(); 
+        static Dictionary<ListKey, EDHOC> MessageList = new Dictionary<ListKey, EDHOC>(); 
         
 
         public byte[] KeyIdentifier {
@@ -89,9 +120,9 @@ namespace EDHOC
             }
 
             _kid[0] = contextKey[CoseKeyKeys.KeyIdentifier];
-            _SessionId[0] = UTF8Encoding.UTF8.GetBytes("Session ID");
+            _SessionId[0] = UTF8Encoding.UTF8.GetBytes("kid client");
             _Nonce[0] = UTF8Encoding.UTF8.GetBytes("Nonce Client");
-            _Keys[0] = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP, "Ed25519");
+            _Keys[0] = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP, "X25519");
 
             
             _Secret = contextKey;
@@ -109,7 +140,7 @@ namespace EDHOC
 
             msg.Add(_SessionId[0]);
             msg.Add(_Nonce[0]);
-            msg.Add(_Keys[0]);
+            msg.Add(_Keys[0].PublicKey().AsCBOR());
 
             CBORObject obj = CBORObject.NewArray();         // Key Agree algorithms
             obj.Add(AlgorithmValues.ECDH_SS_HKDF_256);
@@ -124,13 +155,14 @@ namespace EDHOC
             }
             else {
                 obj = CBORObject.NewArray();                // SIG verify algorithms
-                obj.Add(AlgorithmValues.EdDSA);
+                obj.Add(AlgorithmValuesInt.ECDSA_256);
+                // obj.Add(AlgorithmValues.EdDSA);
                 msg.Add(obj);
 
                 msg.Add(obj);                               // SIG generate algorithms
             }
 
-            MessageList.Add(_SessionId[0], this);
+            MessageList.Add(new ListKey( _SessionId[0]), this);
 
             _Messages[0] = msg.EncodeToBytes();         // message_1
             return _Messages[0];
@@ -157,13 +189,13 @@ namespace EDHOC
             edhoc._Keys[1] = new OneKey(msg[3]);
             edhoc._algKeyAgree = _SelectAlgorithm(msg[4], AlgorithmValues.ECDH_SS_HKDF_256);
             edhoc._algAEAD = _SelectAlgorithm(msg[5], AlgorithmValues.AES_CCM_64_64_128);
-            edhoc._algSign = _SelectAlgorithm(msg[6], AlgorithmValues.EdDSA);
+            edhoc._algSign = _SelectAlgorithm(msg[6], AlgorithmValues.ECDSA_256);
 
-            edhoc._Keys[0] = OneKey.GenerateKey(null, edhoc._Keys[1][CoseKeyKeys.KeyType], edhoc._Keys[1][CoseKeyParameterKeys.EC_Curve].AsString());
-            edhoc._SessionId[0] = edhoc._SessionId[1];
+            edhoc._Keys[0] = OneKey.GenerateKey(null, edhoc._Keys[1][CoseKeyKeys.KeyType], "X25519" /*edhoc._Keys[1][CoseKeyParameterKeys.EC_Curve].AsString()*/);
+            edhoc._SessionId[0] = UTF8Encoding.UTF8.GetBytes("Kid Svr");
             edhoc._Nonce[0] = UTF8Encoding.UTF8.GetBytes("Server Nonce");
 
-            MessageList.Add(edhoc._SessionId[0], edhoc);
+            MessageList.Add(new ListKey( edhoc._SessionId[0]), edhoc);
 
             return edhoc;
         }
@@ -183,13 +215,14 @@ namespace EDHOC
             msg.Add(_SessionId[1]);     // S_U
             msg.Add(_SessionId[0]);     // S_V
             msg.Add(_Nonce[0]);         // N_V
-            msg.Add(_Keys[0]);          // E_V
+            msg.Add(_Keys[0].PublicKey().AsCBOR()); // E_V
             msg.Add(_algKeyAgree);      // HKDF_V
             msg.Add(_algAEAD);          // AEAD_V
             if (!_fSymmetricSecret) {
                 msg.Add(_algSign);          // SIG_V
 
                 obj = CBORObject.NewArray();
+                obj.Add(AlgorithmValuesInt.ECDSA_256);
                 obj.Add(AlgorithmValues.EdDSA);
                 msg.Add(obj);               // SIGs_V
             }
@@ -197,14 +230,14 @@ namespace EDHOC
             byte[] data2 = msg.EncodeToBytes();
             byte[] aad_2 = Concatenate(new byte[2][] { _Messages[0], data2 });   // M00TODO - hash message[0] before passing it in.
 
-            byte[][] useKeys = _DeriveKeys(_Keys, null, aad_2, _algAEAD.AsInt32());
+            byte[][] useKeys = _DeriveKeys(_Keys, null, aad_2, _algAEAD);
             byte[] aeadKey = useKeys[0];
 
             Sign1Message sign1 = new Sign1Message(false, false);
             sign1.SetContent(aad_2);
-            sign1.AddAttribute(HeaderKeys.KeyId, _Secret[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
+            sign1.AddAttribute(HeaderKeys.KeyId, _SigningKey[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
 
-            sign1.Sign(_Secret);
+            sign1.Sign(_SigningKey);
             byte[] signResult = sign1.EncodeToBytes();
 
             Encrypt0Message enc0 = new Encrypt0Message(true);
@@ -222,61 +255,62 @@ namespace EDHOC
             return _Messages[1];
         }
 
-        static public EDHOC ParseMessage2(byte[] msgData, KeySet keySetPublic)
+        public void ParseMessage2(byte[] msgData, KeySet keySetPublic)
         {
-            EDHOC edhoc;
             int msgIndex;
             CBORObject algVerify = null;
 
             CBORObject msg = CBORObject.DecodeFromBytes(msgData);
             if (msg.Type != CBORType.Array) throw new Exception("Invalid message");
 
-            edhoc = MessageList[msg[1].GetByteString()];  // Lookup by S_U
+//            edhoc = MessageList[msg[1].GetByteString()];  // Lookup by S_U
 
-            edhoc._Messages[1] = msgData;
+            _Messages[1] = msgData;
 
-            if (edhoc._fSymmetricSecret) {
+            if (_fSymmetricSecret) {
                 if (msg[0].AsInt16() != 5) throw new Exception("Invalid Message");
             }
             else {
                 if (msg[0].AsInt16() != 2) throw new Exception("Invalid Message");
             }
 
-            edhoc._SessionId[1] = msg[2].GetByteString();       // S_V
-            edhoc._Nonce[1] = msg[3].GetByteString();           // N_V
-            edhoc._Keys[1] = new OneKey(msg[4]);                // E_V
-            edhoc._algKeyAgree = msg[5];                        // HKDF_V
-            edhoc._algAEAD = msg[6];                            // AAEAD_V
-            if (edhoc._fSymmetricSecret) {
+            _SessionId[1] = msg[2].GetByteString();       // S_V
+            _Nonce[1] = msg[3].GetByteString();           // N_V
+            _Keys[1] = new OneKey(msg[4]);                // E_V
+            _algKeyAgree = msg[5];                        // HKDF_V
+            _algAEAD = msg[6];                            // AAEAD_V
+            if (_fSymmetricSecret) {
                 msgIndex = 7;
             }
             else {
                 algVerify = msg[7];                             // SIG_V
-                edhoc._algSign = msg[8];                        // SIG_U
+                _algSign = _SelectAlgorithm(msg[8], AlgorithmValues.ECDSA_256);                        // SIG_U
                 msgIndex = 9;
             }
 
 
-            Encrypt0Message enc0 = (Encrypt0Message)Message.DecodeFromBytes(msg[msgIndex].EncodeToBytes(), Tags.Encrypt0);
+            Encrypt0Message enc0 = (Encrypt0Message)Com.AugustCellars.COSE.Message.DecodeFromBytes(msg[msgIndex].EncodeToBytes(), Tags.Encrypt0);
 
             msg.Remove(msg[msgIndex]);
             byte[] data_2 = msg.EncodeToBytes();
-            byte[] aad_2 = new byte[edhoc._Messages[0].Length + data_2.Length];  // M00TODO - hash Message1 before doing this.
+            byte[] aad_2 = Concatenate(new byte[2][] { _Messages[0], data_2 });   // M00TODO - hash message[0] before passing it in.
 
-            byte[][] useKeys = _DeriveKeys(edhoc._Keys, null, aad_2, edhoc._algAEAD.AsInt32());
+            byte[][] useKeys = _DeriveKeys(_Keys, null, aad_2, _algAEAD);
             byte[] encKey = useKeys[0];
-            enc0.AddAttribute(HeaderKeys.Algorithm, edhoc._algAEAD, Attributes.DO_NOT_SEND);
+            enc0.AddAttribute(HeaderKeys.Algorithm, _algAEAD, Attributes.DO_NOT_SEND);
             enc0.AddAttribute(HeaderKeys.IV, CBORObject.FromObject(useKeys[1]), Attributes.DO_NOT_SEND);
+            enc0.SetExternalData(aad_2);
             byte[] body = enc0.Decrypt(encKey);
 
-            if (!edhoc._fSymmetricSecret) {
+            if (!_fSymmetricSecret) {
                 CBORObject encBody = CBORObject.DecodeFromBytes(body);
 
-                Sign1Message sign1 = (Sign1Message)Message.DecodeFromBytes(encBody[0].EncodeToBytes(), Tags.Sign1);
+                Sign1Message sign1 = (Sign1Message)Com.AugustCellars.COSE.Message.DecodeFromBytes(encBody[0].GetByteString(), Tags.Sign1);
                 sign1.AddAttribute(HeaderKeys.Algorithm, algVerify, Attributes.DO_NOT_SEND);
 
                 CBORObject kid = sign1.FindAttribute(HeaderKeys.KeyId);
                 sign1.SetExternalData(aad_2);
+
 
 
                 foreach (OneKey sigKey in keySetPublic) {
@@ -287,9 +321,6 @@ namespace EDHOC
             else {
                 // body is the EXT_2 value
             }
-
-
-            return edhoc;
         }
 
         public byte[] CreateMessage3()
@@ -313,11 +344,12 @@ namespace EDHOC
             sign1.Sign(_Secret);
 
             CBORObject obj = CBORObject.NewArray();
-            obj.Add(sign1.BEncodeToBytes());
+            obj.Add(sign1.EncodeToBytes());
 
-            byte[][] encKeys = _DeriveKeys(_Keys, null, aad_3, _algAEAD.AsInt32());
+            byte[][] encKeys = _DeriveKeys(_Keys, null, aad_3, _algAEAD);
 
             Encrypt0Message enc = new Encrypt0Message(false);
+            enc.SetContent((obj.EncodeToBytes()));
             enc.SetExternalData(aad_3);
             enc.AddAttribute(HeaderKeys.Algorithm, _algAEAD, Attributes.DO_NOT_SEND);
             enc.AddAttribute(HeaderKeys.IV, CBORObject.FromObject(encKeys[1]), Attributes.DO_NOT_SEND);
@@ -330,14 +362,13 @@ namespace EDHOC
 
         static public EDHOC ParseMessage3(byte[] msgData, KeySet serverKeys)
         {
-            EDHOC edhoc;
             int msgIndex;
             CBORObject algVerify = null;
 
             CBORObject msg = CBORObject.DecodeFromBytes(msgData);
             if (msg.Type != CBORType.Array) throw new Exception("Invalid message");
 
-            edhoc = MessageList[msg[1].GetByteString()];  // Lookup by S_V
+            EDHOC edhoc = MessageList[new ListKey( msg[1].GetByteString())];
 
             edhoc._Messages[2] = msgData;
 
@@ -349,25 +380,26 @@ namespace EDHOC
             }
 
 
-            Encrypt0Message enc0 = (Encrypt0Message)Message.DecodeFromBytes(msg[2].EncodeToBytes(), Tags.Encrypt0);
+            Encrypt0Message enc0 = (Encrypt0Message)Com.AugustCellars.COSE.Message.DecodeFromBytes(msg[2].GetByteString(), Tags.Encrypt0);
 
             msg.Remove(msg[2]);
 
             byte[] data_3 = msg.EncodeToBytes();
-            byte[] aad_3 = new byte[edhoc._Messages[0].Length + data_3.Length];  // M00TODO - hash Message1 before doing this.
+            byte[] aad_3 = Concatenate(new byte[][] { edhoc._Messages[0], edhoc._Messages[1], data_3});
 
-            byte[][] useKeys = _DeriveKeys(edhoc._Keys, null, aad_3, edhoc._algAEAD.AsInt32());
+            byte[][] useKeys = _DeriveKeys(edhoc._Keys, null, aad_3, edhoc._algAEAD);
             byte[] encKey = useKeys[0];
 
             enc0.AddAttribute(HeaderKeys.Algorithm, edhoc._algAEAD, Attributes.DO_NOT_SEND);
             enc0.AddAttribute(HeaderKeys.IV, CBORObject.FromObject(useKeys[1]), Attributes.DO_NOT_SEND);
+            enc0.SetExternalData(aad_3);
             byte[] body = enc0.Decrypt(encKey);
 
             if (!edhoc._fSymmetricSecret) {
                 CBORObject encBody = CBORObject.DecodeFromBytes(body);
 
-                Sign1Message sign1 = (Sign1Message)Message.DecodeFromBytes(encBody[0].EncodeToBytes(), Tags.Sign1);
-                sign1.AddAttribute(HeaderKeys.Algorithm, algVerify, Attributes.DO_NOT_SEND);
+                Sign1Message sign1 = (Sign1Message)Com.AugustCellars.COSE.Message.DecodeFromBytes(encBody[0].GetByteString(), Tags.Sign1);
+                sign1.AddAttribute(HeaderKeys.Algorithm, edhoc._algSign, Attributes.DO_NOT_SEND);
 
                 CBORObject kid = sign1.FindAttribute(HeaderKeys.KeyId);
                 sign1.SetExternalData(aad_3);
@@ -382,7 +414,6 @@ namespace EDHOC
                 // body is the EXT_3 value
             }
 
-
             return edhoc;
         }
 
@@ -394,17 +425,17 @@ namespace EDHOC
         /// <param name="otherData">SuppPubInfo other data bytes - changes for each message</param>
         /// <param name="algAEAD">Symmetric algorithm for encryption</param>
         /// <returns>array of two byte arrays.  The first is the key, the second is the IV</returns>
-        private static byte[][] _DeriveKeys(OneKey[] keys, byte[] salt, byte[] otherData, int algAEAD)
+        private static byte[][] _DeriveKeys(OneKey[] keys, byte[] salt, byte[] otherData, CBORObject algAEAD)
         {
             int cbitKey = 0;
             int cbitIV = 0;
 
             byte[] secret = ECDH_GenerateSecret(keys);
 
-            switch ((AlgorithmValuesInt) algAEAD) {
+            switch ((AlgorithmValuesInt) algAEAD.AsInt32()) {
                 case AlgorithmValuesInt.AES_CCM_64_64_128:
                     cbitKey = 128;
-                    cbitIV = 64;
+                    cbitIV = 58;
                     break;
 
                 default:
@@ -424,7 +455,7 @@ namespace EDHOC
             context.Add(partyInfo);     // Party V
 
             CBORObject obj = CBORObject.NewArray();
-            obj.Add(cbitKey);
+            obj.Add(cbitKey/8);
             obj.Add(CBORObject.FromObject(new byte[0]));
             obj.Add(otherData);
             context.Add(obj);           // SuppPubInfo
@@ -435,14 +466,15 @@ namespace EDHOC
 
             returnValue[0] = HKDF(secret, salt, rgbContext, cbitKey, new Sha256Digest());
 
-            obj[0] = CBORObject.FromObject(cbitIV);
+            obj[0] = CBORObject.FromObject(cbitIV/8);
             context[0] = CBORObject.FromObject("EDHOC IV");
-            returnValue[1] = HKDF(null, secret, rgbContext, cbitIV, new Sha256Digest());
+            returnValue[1] = HKDF(secret, salt, rgbContext, cbitIV, new Sha256Digest());
             return returnValue;
         }
 
         private static CBORObject _SelectAlgorithm(CBORObject algList, CBORObject alg)
         {
+
             // M00BUG Not correct impementation.
             if (algList.Count == 1) return algList[0];
             return algList[0];
@@ -561,6 +593,18 @@ namespace EDHOC
 
             Array.Copy(rgbT, 0, rgbOut, 0, cbit / 8);
             return rgbOut;
+        }
+
+        public CoAP.OSCOAP.SecurityContext CreateSecurityContext()
+        {
+            byte[] otherData = Concatenate(new byte[][] {_Messages[0], _Messages[1], _Messages[2]});
+            byte[][] MasterSecret = _DeriveKeys(_Keys, SharedSecret, otherData, CBORObject.FromObject("EDHOC OSCOAP Master Secret"));
+            byte[][] MasterSalt = _DeriveKeys(_Keys, SharedSecret, otherData, CBORObject.FromObject("EDHOC OSCOAP Master IV"));
+
+            CoAP.OSCOAP.SecurityContext.DeriveContext(MasterSecret[0], _SessionId[0], _SessionId[1], MasterSalt[0], _algAEAD,
+                _algKeyAgree);
+
+            return null;
         }
     }
 }

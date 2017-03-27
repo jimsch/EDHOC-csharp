@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Com.AugustCellars.COSE;
 using CoAP.Server.Resources;
 
-namespace EDHOC
+namespace CoAP.EDHOC
 {
     public class EdhocResource : Resource
     {
