@@ -45,7 +45,7 @@ namespace CoAP.EDHOC
 
                 case 4:
                     edhoc = EDHOC.ParseMessage1(body);
-                    Key y = null;
+                    OneKey y = null;
                     foreach (Key x in _allKeys) {
                         if (x.ContainsName(CoseKeyKeys.KeyIdentifier)) {
                             if (x[CoseKeyKeys.KeyIdentifier].GetByteString().Equals(edhoc.KeyIdentifier)) {
@@ -53,7 +53,7 @@ namespace CoAP.EDHOC
                                     exchange.Respond(CoAP.StatusCode.BadRequest);
                                     return;
                                 }
-                                y = x;
+                                y = new OneKey(x.AsCBOR());
                             }
                         }
                     }
@@ -67,7 +67,7 @@ namespace CoAP.EDHOC
                         return;
                     }
 
-                    edhoc.SharedSecret = y[CoseKeyParameterKeys.Octet_k].GetByteString();
+                    edhoc.SharedSecret = y;
 
                     body = edhoc.CreateMessage2();
                     exchange.Respond(CoAP.StatusCode.Content, body);

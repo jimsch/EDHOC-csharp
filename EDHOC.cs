@@ -7,22 +7,14 @@ using System.Threading.Tasks;
 using Com.AugustCellars.COSE;
 using PeterO.Cbor;
 
-using Org.BouncyCastle.Asn1.Nist;
 using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Agreement;
 using Org.BouncyCastle.Crypto.Digests;
-using Org.BouncyCastle.Crypto.Engines;
-using Org.BouncyCastle.Crypto.Encodings;
-using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Macs;
-using Org.BouncyCastle.Crypto.Modes;
-using Org.BouncyCastle.Crypto.Modes.Gcm;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Math.EC;
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.Utilities.Encoders;
 
 
 namespace CoAP.EDHOC
@@ -70,7 +62,7 @@ namespace CoAP.EDHOC
         CBORObject _algSign;
         byte[][] _Messages = new byte[3][];
 
-        OneKey _Secret;
+//        OneKey _Secret;
         OneKey _SigningKey;
 
         static Dictionary<ListKey, EDHOC> MessageList = new Dictionary<ListKey, EDHOC>(); 
@@ -80,10 +72,23 @@ namespace CoAP.EDHOC
             get { return _kid[1].GetByteString(); }
         }
 
-        byte[] _SharedSecret;
-        public byte[] SharedSecret {
-            get { return _SharedSecret; }
-            set { _SharedSecret = value; }
+        OneKey _SharedSecret;
+        public OneKey SharedSecret {
+            // get { return _SharedSecret; }
+            set
+            {
+                if (!value[CoseKeyKeys.KeyType].Equals(GeneralValues.KeyType_Octet)) throw new ArgumentException();
+                _SharedSecret = value;
+            }
+        }
+
+        private byte[] _SecretSalt
+        {
+            get
+            {
+                if (_SharedSecret == null) return null;
+                return _SharedSecret[CoseKeyParameterKeys.Octet_k].GetByteString();
+            }
         }
 
         public OneKey SigningKey {
@@ -105,6 +110,7 @@ namespace CoAP.EDHOC
             switch ((GeneralValuesInt) contextKey[CoseKeyKeys.KeyType].AsInt32()) {
                 case GeneralValuesInt.KeyType_Octet:
                     _fSymmetricSecret = true;
+                    _SharedSecret = contextKey;
                     break;
 
                 case GeneralValuesInt.KeyType_EC2:
@@ -113,6 +119,7 @@ namespace CoAP.EDHOC
                     if (!contextKey.ContainsName(CoseKeyParameterKeys.EC_D)) {
                         throw new Exception("Need to supply a private key with the signing key");
                     }
+                    _SigningKey = contextKey;
                     break;
 
                 default:
@@ -123,9 +130,6 @@ namespace CoAP.EDHOC
             _SessionId[0] = UTF8Encoding.UTF8.GetBytes("kid client");
             _Nonce[0] = UTF8Encoding.UTF8.GetBytes("Nonce Client");
             _Keys[0] = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP, "X25519");
-
-            
-            _Secret = contextKey;
         }
 
         public byte[] CreateMessage1()
@@ -151,7 +155,7 @@ namespace CoAP.EDHOC
             msg.Add(obj);
 
             if (_fSymmetricSecret) {
-                msg.Add("KID");
+                msg.Add(_SharedSecret[CoseKeyKeys.KeyIdentifier]);
             }
             else {
                 obj = CBORObject.NewArray();                // SIG verify algorithms
@@ -189,7 +193,9 @@ namespace CoAP.EDHOC
             edhoc._Keys[1] = new OneKey(msg[3]);
             edhoc._algKeyAgree = _SelectAlgorithm(msg[4], AlgorithmValues.ECDH_SS_HKDF_256);
             edhoc._algAEAD = _SelectAlgorithm(msg[5], AlgorithmValues.AES_CCM_64_64_128);
-            edhoc._algSign = _SelectAlgorithm(msg[6], AlgorithmValues.ECDSA_256);
+            if (!edhoc._fSymmetricSecret) {
+                edhoc._algSign = _SelectAlgorithm(msg[6], AlgorithmValues.ECDSA_256);
+            }
 
             edhoc._Keys[0] = OneKey.GenerateKey(null, edhoc._Keys[1][CoseKeyKeys.KeyType], "X25519" /*edhoc._Keys[1][CoseKeyParameterKeys.EC_Curve].AsString()*/);
             edhoc._SessionId[0] = UTF8Encoding.UTF8.GetBytes("Kid Svr");
@@ -230,15 +236,18 @@ namespace CoAP.EDHOC
             byte[] data2 = msg.EncodeToBytes();
             byte[] aad_2 = Concatenate(new byte[2][] { _Messages[0], data2 });   // M00TODO - hash message[0] before passing it in.
 
-            byte[][] useKeys = _DeriveKeys(_Keys, null, aad_2, _algAEAD);
+            byte[][] useKeys = _DeriveKeys(_Keys, _SecretSalt, aad_2, _algAEAD);
             byte[] aeadKey = useKeys[0];
 
-            Sign1Message sign1 = new Sign1Message(false, false);
-            sign1.SetContent(aad_2);
-            sign1.AddAttribute(HeaderKeys.KeyId, _SigningKey[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
+            byte[] signResult = new byte[0];
+            if (!_fSymmetricSecret) {
+                Sign1Message sign1 = new Sign1Message(false, false);
+                sign1.SetContent(aad_2);
+                sign1.AddAttribute(HeaderKeys.KeyId, _SigningKey[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
 
-            sign1.Sign(_SigningKey);
-            byte[] signResult = sign1.EncodeToBytes();
+                sign1.Sign(_SigningKey);
+                signResult = sign1.EncodeToBytes();
+            }
 
             Encrypt0Message enc0 = new Encrypt0Message(true);
             enc0.AddAttribute(HeaderKeys.Algorithm, _algAEAD, Attributes.DO_NOT_SEND);
@@ -295,7 +304,7 @@ namespace CoAP.EDHOC
             byte[] data_2 = msg.EncodeToBytes();
             byte[] aad_2 = Concatenate(new byte[2][] { _Messages[0], data_2 });   // M00TODO - hash message[0] before passing it in.
 
-            byte[][] useKeys = _DeriveKeys(_Keys, null, aad_2, _algAEAD);
+            byte[][] useKeys = _DeriveKeys(_Keys, _SecretSalt, aad_2, _algAEAD);
             byte[] encKey = useKeys[0];
             enc0.AddAttribute(HeaderKeys.Algorithm, _algAEAD, Attributes.DO_NOT_SEND);
             enc0.AddAttribute(HeaderKeys.IV, CBORObject.FromObject(useKeys[1]), Attributes.DO_NOT_SEND);
@@ -337,19 +346,24 @@ namespace CoAP.EDHOC
 
             byte[] aad_3 = Concatenate(new byte[3][] { _Messages[0], _Messages[1], msg.EncodeToBytes() });  //M00BUG this is an incorrect formula
 
-            Sign1Message sign1 = new Sign1Message(false, false);
-            sign1.SetContent(aad_3);
-            sign1.AddAttribute(HeaderKeys.Algorithm, _algSign, Attributes.DO_NOT_SEND);
-            sign1.AddAttribute(HeaderKeys.KeyId, _Secret[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
-            sign1.Sign(_Secret);
+            byte[] signBody = new byte[0];
+            if (!_fSymmetricSecret) {
+                Sign1Message sign1 = new Sign1Message(false, false);
+                sign1.SetContent(aad_3);
+                sign1.AddAttribute(HeaderKeys.Algorithm, _algSign, Attributes.DO_NOT_SEND);
+                sign1.AddAttribute(HeaderKeys.KeyId, _SigningKey[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
+                sign1.Sign(_SigningKey);
 
-            CBORObject obj = CBORObject.NewArray();
-            obj.Add(sign1.EncodeToBytes());
+                CBORObject obj = CBORObject.NewArray();
+                obj.Add(sign1.EncodeToBytes());
 
-            byte[][] encKeys = _DeriveKeys(_Keys, null, aad_3, _algAEAD);
+                signBody = obj.EncodeToBytes();
+            }
+
+            byte[][] encKeys = _DeriveKeys(_Keys, _SecretSalt, aad_3, _algAEAD);
 
             Encrypt0Message enc = new Encrypt0Message(false);
-            enc.SetContent((obj.EncodeToBytes()));
+            enc.SetContent(signBody);
             enc.SetExternalData(aad_3);
             enc.AddAttribute(HeaderKeys.Algorithm, _algAEAD, Attributes.DO_NOT_SEND);
             enc.AddAttribute(HeaderKeys.IV, CBORObject.FromObject(encKeys[1]), Attributes.DO_NOT_SEND);
@@ -387,7 +401,7 @@ namespace CoAP.EDHOC
             byte[] data_3 = msg.EncodeToBytes();
             byte[] aad_3 = Concatenate(new byte[][] { edhoc._Messages[0], edhoc._Messages[1], data_3});
 
-            byte[][] useKeys = _DeriveKeys(edhoc._Keys, null, aad_3, edhoc._algAEAD);
+            byte[][] useKeys = _DeriveKeys(edhoc._Keys,edhoc._SecretSalt, aad_3, edhoc._algAEAD);
             byte[] encKey = useKeys[0];
 
             enc0.AddAttribute(HeaderKeys.Algorithm, edhoc._algAEAD, Attributes.DO_NOT_SEND);
@@ -401,14 +415,31 @@ namespace CoAP.EDHOC
                 Sign1Message sign1 = (Sign1Message)Com.AugustCellars.COSE.Message.DecodeFromBytes(encBody[0].GetByteString(), Tags.Sign1);
                 sign1.AddAttribute(HeaderKeys.Algorithm, edhoc._algSign, Attributes.DO_NOT_SEND);
 
-                CBORObject kid = sign1.FindAttribute(HeaderKeys.KeyId);
+                CBORObject kidObject = sign1.FindAttribute(HeaderKeys.KeyId);
+                byte[] kid = null;
+                if (kidObject != null) kid = kidObject.GetByteString();
                 sign1.SetExternalData(aad_3);
 
-
+                KeySet keys = new KeySet();
                 foreach (OneKey sigKey in serverKeys) {
-
-                    sign1.Validate(sigKey); //FIND KEY);
+                    if (sigKey.HasKid(kid)) keys.AddKey(sigKey);
                 }
+
+                List<OneKey> ks = new List<OneKey>();
+                List<OneKey> ks2 = ks.Where(f => f.HasKid(kid)).ToList();
+
+                OneKey signingKey = null;
+                foreach (OneKey sigKey in keys) {
+                    try {
+                        sign1.Validate(sigKey);
+                        signingKey = sigKey;
+                    }
+                    catch (Exception) {
+                        // nop;
+                    }
+                }
+
+                if (signingKey == null) throw new Exception("Unable to complete - no signing key found");
             }
             else {
                 // body is the EXT_3 value
@@ -598,8 +629,8 @@ namespace CoAP.EDHOC
         public CoAP.OSCOAP.SecurityContext CreateSecurityContext()
         {
             byte[] otherData = Concatenate(new byte[][] {_Messages[0], _Messages[1], _Messages[2]});
-            byte[][] MasterSecret = _DeriveKeys(_Keys, SharedSecret, otherData, CBORObject.FromObject("EDHOC OSCOAP Master Secret"));
-            byte[][] MasterSalt = _DeriveKeys(_Keys, SharedSecret, otherData, CBORObject.FromObject("EDHOC OSCOAP Master IV"));
+            byte[][] MasterSecret = _DeriveKeys(_Keys, _SecretSalt, otherData, CBORObject.FromObject("EDHOC OSCOAP Master Secret"));
+            byte[][] MasterSalt = _DeriveKeys(_Keys, _SecretSalt, otherData, CBORObject.FromObject("EDHOC OSCOAP Master IV"));
 
             CoAP.OSCOAP.SecurityContext.DeriveContext(MasterSecret[0], _SessionId[0], _SessionId[1], MasterSalt[0], _algAEAD,
                 _algKeyAgree);

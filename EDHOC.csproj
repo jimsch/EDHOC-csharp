@@ -54,9 +54,7 @@
   <ItemGroup>
     <Compile Include="EDHOC.cs" />
     <Compile Include="EdhocResource.cs" />
-    <Compile Include="Message1.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Test.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\coap\CoAP.NET\CoAP.NET\CoAP.NET40.csproj">
