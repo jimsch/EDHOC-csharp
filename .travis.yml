@@ -7,7 +7,7 @@ env:
 #  - SLN=CoAP.NET40.2010.sln
 #    TARGET=NET40
 #    VERSION=Release
-  - SLN=EDHOC.NET45.sln
+  - SLN=EDHOC.Net45.sln
     TARGET=NET45
     VERSION=Release
 #  - SLN=CoAP.NET45.sln
