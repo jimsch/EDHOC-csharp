@@ -5,13 +5,14 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Com.AugustCellars.COSE;
-using CoAP.Server.Resources;
+using Com.AugustCellars.CoAP.Server.Resources;
+using PeterO.Cbor;
 
-namespace CoAP.EDHOC
+namespace Com.AugustCellars.CoAP.EDHOC
 {
     public class EdhocResource : Resource
     {
-        Dictionary<byte[], EDHOC> currentSetOfItems = new Dictionary<byte[], EDHOC>();
+        Dictionary<byte[], EdhocResponder> currentSetOfItems = new Dictionary<byte[], EdhocResponder>();
         KeySet _allKeys;
         OneKey _signKey;
 
@@ -33,60 +34,76 @@ namespace CoAP.EDHOC
         protected override void DoPost(CoapExchange exchange)
         {
             byte[] body = exchange.Request.Payload;
-            EDHOC edhoc;
+            EdhocResponder edhoc;
 
-            switch (body[1] & 0xf) {
-                case 1:
-                    edhoc = EDHOC.ParseMessage1(body);
-                    edhoc.SigningKey =_signKey;
-                    body = edhoc.CreateMessage2();
-                    exchange.Respond(CoAP.StatusCode.Content, body);
-                    break;
+            try
+            {
+                switch (body[1] & 0xf)
+                {
+                    case 1:
+                        edhoc = EdhocResponder.ParseMessage1(body);
+                        edhoc.SigningKey = _signKey;
+                        body = edhoc.CreateMessage2();
+                        exchange.Respond(CoAP.StatusCode.Content, body);
+                        break;
 
-                case 4:
-                    edhoc = EDHOC.ParseMessage1(body);
-                    OneKey y = null;
-                    foreach (Key x in _allKeys) {
-                        if (x.ContainsName(CoseKeyKeys.KeyIdentifier)) {
-                            if (x[CoseKeyKeys.KeyIdentifier].GetByteString().Equals(edhoc.KeyIdentifier)) {
-                                if (y != null) {
-                                    exchange.Respond(CoAP.StatusCode.BadRequest);
-                                    return;
+                    case 4:
+                        edhoc = EdhocResponder.ParseMessage1(body);
+                        OneKey y = null;
+                        foreach (Key x in _allKeys)
+                        {
+                            if (x.ContainsName(CoseKeyKeys.KeyIdentifier))
+                            {
+                                if (x[CoseKeyKeys.KeyIdentifier].GetByteString().Equals(edhoc.KeyIdentifier))
+                                {
+                                    if (y != null)
+                                    {
+                                        exchange.Respond(CoAP.StatusCode.BadRequest);
+                                        return;
+                                    }
+                                    y = new OneKey(x.AsCBOR());
                                 }
-                                y = new OneKey(x.AsCBOR());
                             }
                         }
-                    }
-                    if (y == null) {
+                        if (y == null)
+                        {
+                            exchange.Respond(CoAP.StatusCode.BadRequest);
+                            return;
+                        }
+
+                        if (!y[CoseKeyKeys.KeyType].Equals(GeneralValues.KeyType_Octet))
+                        {
+                            exchange.Respond(CoAP.StatusCode.BadRequest);
+                            return;
+                        }
+
+                        edhoc.SharedSecret = y;
+
+                        body = edhoc.CreateMessage2();
+                        exchange.Respond(CoAP.StatusCode.Content, body);
+                        break;
+
+                    case 3:
+                        edhoc = EdhocResponder.ParseMessage3(body, _allKeys);
+
+                        // CoAP.OSCOAP.SecurityContext ctx = CoAP.OSCOAP.SecurityContext.DeriveContext(edhoc.MasterSecret, SenderId, Recipientid, null, edhoc.AlgAEAD);
+                        // CoAP.OSCOAP.SecurityContextSet.AllContexts.Add(ctx);
+                        break;
+
+                    case 6:
+                        edhoc = EdhocResponder.ParseMessage3(body, _allKeys);
+                        break;
+
+                    default:
                         exchange.Respond(CoAP.StatusCode.BadRequest);
-                        return;
-                    }
-
-                    if (!y[CoseKeyKeys.KeyType].Equals(GeneralValues.KeyType_Octet)) {
-                        exchange.Respond(CoAP.StatusCode.BadRequest);
-                        return;
-                    }
-
-                    edhoc.SharedSecret = y;
-
-                    body = edhoc.CreateMessage2();
-                    exchange.Respond(CoAP.StatusCode.Content, body);
-                    break;
-
-                case 3:
-                    edhoc = EDHOC.ParseMessage3(body, _allKeys);
-
-                    // CoAP.OSCOAP.SecurityContext ctx = CoAP.OSCOAP.SecurityContext.DeriveContext(edhoc.MasterSecret, SenderId, Recipientid, null, edhoc.AlgAEAD);
-                    // CoAP.OSCOAP.SecurityContextSet.AllContexts.Add(ctx);
-                    break;
-
-                case 6:
-                    edhoc = EDHOC.ParseMessage3(body, _allKeys);
-                    break;
-
-                default:
-                    exchange.Respond(CoAP.StatusCode.BadRequest);
-                    break;
+                        break;
+                }
+            }
+            catch (Exception e) {
+                CBORObject obj = CBORObject.NewArray();
+                obj.Add(0);
+                obj.Add(e.ToString());
+                exchange.Respond(CoAP.StatusCode.Content, obj.EncodeToBytes());
             }
         }
     }

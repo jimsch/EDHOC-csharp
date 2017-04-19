@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26403.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EDHOC.NET45", "EDHOC.NET45.csproj", "{787820E9-CA79-4398-A17B-73CE1FF158DB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "Server\Server.csproj", "{03E937C4-8DE1-4F89-A620-07CDDD1568F6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Edhoc-Test", "Edhoc-Test\Edhoc-Test.csproj", "{23995B4E-D434-4200-B967-B05C66AE77EB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{787820E9-CA79-4398-A17B-73CE1FF158DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{787820E9-CA79-4398-A17B-73CE1FF158DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{787820E9-CA79-4398-A17B-73CE1FF158DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{787820E9-CA79-4398-A17B-73CE1FF158DB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03E937C4-8DE1-4F89-A620-07CDDD1568F6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03E937C4-8DE1-4F89-A620-07CDDD1568F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03E937C4-8DE1-4F89-A620-07CDDD1568F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03E937C4-8DE1-4F89-A620-07CDDD1568F6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{23995B4E-D434-4200-B967-B05C66AE77EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23995B4E-D434-4200-B967-B05C66AE77EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23995B4E-D434-4200-B967-B05C66AE77EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23995B4E-D434-4200-B967-B05C66AE77EB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
