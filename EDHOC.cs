@@ -29,8 +29,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
             public ListKey(byte[] bytesIn)
             {
-                if (bytesIn == null) throw new ArgumentException();
-                _bytes = bytesIn;
+                _bytes = bytesIn??throw new ArgumentException();
             }
 
             public override bool Equals(object obj)
@@ -627,7 +626,6 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
         static public EdhocResponder ParseMessage3(byte[] msgData, KeySet serverKeys)
         {
-            int msgIndex;
             CBORObject algVerify = null;
 
             CBORObject msg = CBORObject.DecodeFromBytes(msgData);

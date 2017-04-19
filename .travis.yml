@@ -1,0 +1,26 @@
+# Travis-CI Build for dynamitey 
+# see travis-ci.org for details
+
+language: csharp
+
+env:
+#  - SLN=CoAP.NET40.2010.sln
+#    TARGET=NET40
+#    VERSION=Release
+  - SLN=EDHOC.NET45.sln
+    TARGET=NET45
+    VERSION=Release
+#  - SLN=CoAP.NET45.sln
+#    TARGET=NET45
+#    VERSION=Debug
+
+install:
+   - nuget install NUnit.Runners -Version 3.5.0 -OutputDirectory testrunner
+
+script:
+  - ./build.sh
+#  - xbuild CoAP.NET.2010.sln /p:Configuration=Release
+#  - mono ./testrunner/NUnit.Runners.2.6.4/tools/nunit-console.exe ./CoAP.Test/bin/Release/CoAP.Test.dll
+#  - xbuild CoAP.NET.2010.sln /t:Clean
+#  - xbuild CoAP.NET40.2010.sln /p:Configuration=Release
+#  - mono ./testrunner/NUnit.Runners.2.6.4/tools/nunit-console.exe ./CoAP.Test/bin/Release/NET40/CoAP.Test.dll

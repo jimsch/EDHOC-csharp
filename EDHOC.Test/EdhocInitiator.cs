@@ -16,7 +16,7 @@ namespace Edhoc_Test
         byte[] octetKeyID;
 
         [OneTimeSetUp]
-        public void setup()
+        public void Setup()
         {
             keyOctet=new OneKey();
             keyOctet.Add(CoseKeyKeys.KeyType, GeneralValues.KeyType_Octet);
