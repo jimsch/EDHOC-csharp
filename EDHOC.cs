@@ -29,7 +29,8 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
             public ListKey(byte[] bytesIn)
             {
-                _bytes = bytesIn??throw new ArgumentException();
+                if (bytesIn == null) throw new ArgumentException();
+                _bytes = bytesIn;
             }
 
             public override bool Equals(object obj)
