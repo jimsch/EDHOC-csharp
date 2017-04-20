@@ -124,7 +124,21 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
                 }
             }
-            else if (algAEAD.Type != CBORType.TextString) {
+            else if (algAEAD.Type == CBORType.TextString) {
+                switch (algAEAD.AsString()) {
+                case "EDHOC OSCOAP Master Secret":
+                    cbitKey = 128;
+                    break;
+
+                case "EDHOC OSCOAP Master Salt":
+                    cbitKey = 64;
+                    break;
+
+                default:
+                    throw new Exception("Unknown Algorithm");
+                }
+            }
+            else {
                 throw new Exception("Internal Error");
             }
 
@@ -151,9 +165,11 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
             returnValue[0] = HKDF(secret, salt, rgbContext, cbitKey, new Sha256Digest());
 
-            obj[0] = CBORObject.FromObject(cbitIV/8);
-            context[0] = CBORObject.FromObject("IV-GENERATION");
-            returnValue[1] = HKDF(secret, salt, rgbContext, cbitIV, new Sha256Digest());
+            if (cbitIV > 0) {
+                obj[0] = CBORObject.FromObject(cbitIV / 8);
+                context[0] = CBORObject.FromObject("IV-GENERATION");
+                returnValue[1] = HKDF(secret, salt, rgbContext, cbitIV, new Sha256Digest());
+            }
             return returnValue;
         }
 
@@ -305,7 +321,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
         public CoAP.OSCOAP.SecurityContext CreateSecurityContext()
         {
-            byte[] otherData = Concatenate(new byte[][] {_Messages[0], _Messages[1], _Messages[2]});
+            byte[] otherData = _LastMessageAuthenticator;
             byte[][] MasterSecret = _DeriveKeys(_Keys, _SecretSalt, otherData, CBORObject.FromObject("EDHOC OSCOAP Master Secret"));
             byte[][] MasterSalt = _DeriveKeys(_Keys, _SecretSalt, otherData, CBORObject.FromObject("EDHOC OSCOAP Master Salt"));
 
@@ -484,7 +500,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
             else {
                 msg.Add(3);
             }
-            msg.Add(_SessionId[0]);
+            msg.Add(_SessionId[1]);
 
             byte[] aad_3 = ConcatenateAndHash(new byte[2][] { _LastMessageAuthenticator, msg.EncodeToBytes() }, _MessageDigest);
 
@@ -597,8 +613,12 @@ namespace Com.AugustCellars.CoAP.EDHOC
                 msg.Add(obj);               // SIGs_V
             }
 
+            if (_algKeyAgree.Equals(COSE.AlgorithmValues.ECDH_SS_HKDF_256)) {
+                _MessageDigest = new Sha256Digest();
+            }
+
             byte[] data2 = msg.EncodeToBytes();
-            byte[] aad_2 = Concatenate(new byte[2][] { _Messages[0], data2 });   // M00TODO - hash message[0] before passing it in.
+            byte[] aad_2 = ConcatenateAndHash(new byte[2][] { _Messages[0], data2 }, _MessageDigest);   // M00TODO - hash message[0] before passing it in.
 
             byte[][] useKeys = _DeriveKeys(_Keys, _SecretSalt, aad_2, _algAEAD);
             byte[] aeadKey = useKeys[0];
@@ -625,6 +645,9 @@ namespace Com.AugustCellars.CoAP.EDHOC
             msg.Add(enc0.EncodeToCBORObject());  // COSE_ENC_2
 
             _Messages[1] = msg.EncodeToBytes();
+
+            _LastMessageAuthenticator = ConcatenateAndHash(new byte[][] {_Messages[0], _Messages[1]}, _MessageDigest);
+
             return _Messages[1];
         }
 
@@ -652,7 +675,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
             msg.Remove(msg[2]);
 
             byte[] data_3 = msg.EncodeToBytes();
-            byte[] aad_3 = Concatenate(new byte[][] { edhoc._Messages[0], edhoc._Messages[1], data_3 });
+            byte[] aad_3 = ConcatenateAndHash(new byte[][] {edhoc._LastMessageAuthenticator, data_3}, edhoc._MessageDigest);
 
             byte[][] useKeys = _DeriveKeys(edhoc._Keys, edhoc._SecretSalt, aad_3, edhoc._algAEAD);
             byte[] encKey = useKeys[0];
@@ -697,6 +720,8 @@ namespace Com.AugustCellars.CoAP.EDHOC
             else {
                 // body is the EXT_3 value
             }
+
+            edhoc._LastMessageAuthenticator = ConcatenateAndHash(new byte[][] {edhoc._LastMessageAuthenticator, msgData }, edhoc._MessageDigest);
 
             return edhoc;
         }

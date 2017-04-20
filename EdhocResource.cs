@@ -48,9 +48,9 @@ namespace Com.AugustCellars.CoAP.EDHOC
                     case 4:
                         edhoc = EdhocResponder.ParseMessage1(body);
                         OneKey y = null;
-                        foreach (Key x in _allKeys) {
+                        foreach (OneKey x in _allKeys) {
                             if (x.ContainsName(CoseKeyKeys.KeyIdentifier)) {
-                                if (x[CoseKeyKeys.KeyIdentifier].GetByteString().Equals(edhoc.KeyIdentifier)) {
+                                if (x.HasKid(edhoc.KeyIdentifier)) {
                                     if (y != null) {
                                         exchange.Respond(CoAP.StatusCode.BadRequest);
                                         return;
@@ -59,6 +59,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
                                 }
                             }
                         }
+
                         if (y == null) {
                             exchange.Respond(CoAP.StatusCode.BadRequest);
                             return;
@@ -77,13 +78,18 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
                     case 3:
                         edhoc = EdhocResponder.ParseMessage3(body, _allKeys);
+                        exchange.Respond(StatusCode.Changed);
 
-                        // CoAP.OSCOAP.SecurityContext ctx = CoAP.OSCOAP.SecurityContext.DeriveContext(edhoc.MasterSecret, SenderId, Recipientid, null, edhoc.AlgAEAD);
-                        // CoAP.OSCOAP.SecurityContextSet.AllContexts.Add(ctx);
+                        OSCOAP.SecurityContext ctx = edhoc.CreateSecurityContext();
+                        OSCOAP.SecurityContextSet.AllContexts.Add(ctx);
                         break;
 
                     case 6:
                         edhoc = EdhocResponder.ParseMessage3(body, _allKeys);
+                        exchange.Respond(CoAP.StatusCode.Changed);
+
+                        OSCOAP.SecurityContext ctx2 = edhoc.CreateSecurityContext();
+                        OSCOAP.SecurityContextSet.AllContexts.Add(ctx2);
                         break;
 
                     default:
