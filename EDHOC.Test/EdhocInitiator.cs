@@ -22,13 +22,15 @@ namespace Edhoc_Test
             keyOctet.Add(CoseKeyKeys.KeyType, GeneralValues.KeyType_Octet);
             keyOctet.Add(CoseKeyParameterKeys.Octet_k, CBORObject.FromObject(octetKeyValue));
             keyOctet.Add(CoseKeyKeys.KeyIdentifier, CBORObject.FromObject(octetKeyID));
+
+            keyEdDSA = OneKey.GenerateKey(null, GeneralValues.KeyType_EC, "P-256");
+            keyDSA = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP, "Ed25519");
         }
 
         [Test]
         public void Create_Test1()
         {
-            Exception e = Assert.Throws<Exception>(() => new EdhocInitiator(null));
-            Assert.That(e.Message, Is.EqualTo("Null Paramater"));
+            Exception e = Assert.Throws<NullReferenceException>(() => new EdhocInitiator(null));
         }
 
         [Test]
@@ -66,7 +68,7 @@ namespace Edhoc_Test
             Assert.That(val, !Is.EqualTo(null));
             CBORObject obj = CBORObject.DecodeFromBytes(val);
             Assert.That(obj.Type, Is.EqualTo(CBORType.Array));
-            Assert.That(obj.Count, Is.EqualTo(6));
+            Assert.That(obj.Count, Is.EqualTo(7));
 
         }
     }
