@@ -1,7 +1,7 @@
 ﻿using System;
 using NUnit.Framework;
 
-namespace Edhoc_Test
+namespace Com.AugustCellars.CoAP.EDHOC.Test
 {
     [TestFixture]
     public class UnitTest1

@@ -38,6 +38,9 @@
     <Reference Include="CBOR, Version=2.4.2.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\PeterO.Cbor.2.4.2\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CBOR.dll</HintPath>
     </Reference>
+    <Reference Include="CoAP, Version=1.1.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Com.AugustCellars.CoAP.1.1.1\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CoAP.dll</HintPath>
+    </Reference>
     <Reference Include="Com.AugustCellars.CoAP">
       <HintPath>..\packages\Com.AugustCellars.CoAP.1.1.0\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CoAP.dll</HintPath>
     </Reference>

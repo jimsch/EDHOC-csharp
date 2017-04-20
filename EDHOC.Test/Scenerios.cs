@@ -28,19 +28,20 @@ namespace Com.AugustCellars.CoAP.EDHOC.Test
         private OneKey serverSignKey;
 
 
-        [SetUp]
+        [OneTimeSetUp]
         public void SetupServer()
         {
-            serverSignKey = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP);
-            CreateServer();
-
             psk = new OneKey();
             psk.Add(CoseKeyKeys.KeyType, GeneralValues.KeyType_Octet);
             psk.Add(CoseKeyKeys.KeyIdentifier, CBORObject.FromObject(new byte[3] { 1, 2, 3 }));
-            psk.Add(CoseKeyParameterKeys.Octet_k, CBORObject.FromObject(new byte[16] { 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}));
+            psk.Add(CoseKeyParameterKeys.Octet_k, CBORObject.FromObject(new byte[16] { 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 }));
+
+            serverSignKey = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP);
+            CreateServer();
+
         }
 
-        [TearDown]
+        [OneTimeTearDown]
         public void ShutdownServer()
         {
             _server.Dispose();
@@ -58,14 +59,14 @@ namespace Com.AugustCellars.CoAP.EDHOC.Test
             //  Try and get hello -- should fail because no security setup.
 
             CoAP.Response resp = clientHello.Get();
-            Assert.AreEqual(CoAP.StatusCode.Forbidden, resp.StatusCode);
+            Assert.AreEqual(CoAP.StatusCode.Unauthorized, resp.StatusCode);
 
             //  Create and send message #1 for PSK
 
             EDHOC.EdhocInitiator init = new EdhocInitiator(psk);
             byte[] msg = init.CreateMessage1();
 
-            req = new Request(Method.PUT);
+            req = new Request(Method.POST);
             req.Payload = msg;
             resp = client.Send(req);
             Assert.AreEqual(CoAP.StatusCode.Changed, resp.StatusCode);
@@ -75,6 +76,14 @@ namespace Com.AugustCellars.CoAP.EDHOC.Test
             KeySet ks = new KeySet();
             ks.AddKey(serverSignKey);
             init.ParseMessage2(resp.Payload, ks);
+
+            //  Post new message
+
+            msg = init.CreateMessage3();
+            req =new Request(Method.POST);
+            req.Payload = msg;
+            resp = client.Send(req);
+            Assert.AreEqual(StatusCode.Changed, resp.StatusCode);
 
             //  Setup my security context.
             OSCOAP.SecurityContext ctx = init.CreateSecurityContext();
@@ -91,9 +100,16 @@ namespace Com.AugustCellars.CoAP.EDHOC.Test
         private void CreateServer()
         {
             CoAPEndPoint endpoint = new CoAPEndPoint(0);
-            _resource = new EdhocResource(null, null);
+
+
+            KeySet ks = new KeySet();
+            ks.AddKey(psk);
+
+            _resource = new EdhocResource(ks, serverSignKey);
             _server = new CoapServer();
             _server.Add(_resource);
+
+            _server.Add(new Hello("hello"));
 
             _server.AddEndPoint(endpoint);
             _server.Start();

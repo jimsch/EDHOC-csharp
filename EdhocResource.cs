@@ -16,7 +16,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
         KeySet _allKeys;
         OneKey _signKey;
 
-        public EdhocResource(KeySet allKeys, OneKey signingKey) : base("EDHOC")
+        public EdhocResource(KeySet allKeys, OneKey signingKey) : base("edhoc")
         {
             _allKeys = allKeys;
             _signKey = signingKey;
@@ -36,28 +36,22 @@ namespace Com.AugustCellars.CoAP.EDHOC
             byte[] body = exchange.Request.Payload;
             EdhocResponder edhoc;
 
-            try
-            {
-                switch (body[1] & 0xf)
-                {
+            try {
+                switch (body[1] & 0xf) {
                     case 1:
                         edhoc = EdhocResponder.ParseMessage1(body);
                         edhoc.SigningKey = _signKey;
                         body = edhoc.CreateMessage2();
-                        exchange.Respond(CoAP.StatusCode.Content, body);
+                        exchange.Respond(CoAP.StatusCode.Changed, body);
                         break;
 
                     case 4:
                         edhoc = EdhocResponder.ParseMessage1(body);
                         OneKey y = null;
-                        foreach (Key x in _allKeys)
-                        {
-                            if (x.ContainsName(CoseKeyKeys.KeyIdentifier))
-                            {
-                                if (x[CoseKeyKeys.KeyIdentifier].GetByteString().Equals(edhoc.KeyIdentifier))
-                                {
-                                    if (y != null)
-                                    {
+                        foreach (Key x in _allKeys) {
+                            if (x.ContainsName(CoseKeyKeys.KeyIdentifier)) {
+                                if (x[CoseKeyKeys.KeyIdentifier].GetByteString().Equals(edhoc.KeyIdentifier)) {
+                                    if (y != null) {
                                         exchange.Respond(CoAP.StatusCode.BadRequest);
                                         return;
                                     }
@@ -65,14 +59,12 @@ namespace Com.AugustCellars.CoAP.EDHOC
                                 }
                             }
                         }
-                        if (y == null)
-                        {
+                        if (y == null) {
                             exchange.Respond(CoAP.StatusCode.BadRequest);
                             return;
                         }
 
-                        if (!y[CoseKeyKeys.KeyType].Equals(GeneralValues.KeyType_Octet))
-                        {
+                        if (!y[CoseKeyKeys.KeyType].Equals(GeneralValues.KeyType_Octet)) {
                             exchange.Respond(CoAP.StatusCode.BadRequest);
                             return;
                         }
@@ -80,7 +72,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
                         edhoc.SharedSecret = y;
 
                         body = edhoc.CreateMessage2();
-                        exchange.Respond(CoAP.StatusCode.Content, body);
+                        exchange.Respond(CoAP.StatusCode.Changed, body);
                         break;
 
                     case 3:

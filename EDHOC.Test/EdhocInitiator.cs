@@ -4,7 +4,7 @@ using Com.AugustCellars.COSE;
 using Com.AugustCellars.CoAP.EDHOC;
 using PeterO.Cbor;
 
-namespace Edhoc_Test
+namespace Com.AugustCellars.CoAP.EDHOC.Test
 {
     [TestFixture]
     public class EdhocInitiator_Test

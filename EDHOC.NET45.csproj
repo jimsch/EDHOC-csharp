@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -38,12 +38,15 @@
       <HintPath>.\packages\PeterO.Cbor.2.4.2\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CBOR.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="CoAP, Version=1.1.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\Com.AugustCellars.CoAP.1.1.1\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CoAP.dll</HintPath>
+    </Reference>
     <Reference Include="Numbers, Version=0.2.2.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>.\packages\PeterO.Numbers.0.2.2\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\Numbers.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Com.AugustCellars.COSE">
-      <HintPath>.\packages\Com.AugustCellars.COSE.0.1.0\lib\portable-net40+s15+win+wpa81+wp8\COSE.dll</HintPath>
+      <HintPath>.\packages\Com.AugustCellars.COSE.0.1.0\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp8\COSE.dll</HintPath>
     </Reference>
     <Reference Include="Com.AugustCellars.CoAP">
       <HintPath>.\packages\Com.AugustCellars.CoAP.1.1.0\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CoAP.dll</HintPath>

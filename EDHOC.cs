@@ -555,7 +555,10 @@ namespace Com.AugustCellars.CoAP.EDHOC
             edhoc._algKeyAgree = _SelectAlgorithm(msg[4], new CBORObject[]{AlgorithmValues.ECDH_SS_HKDF_256});
             edhoc._algAEAD = _SelectAlgorithm(msg[5], new CBORObject[] { AlgorithmValues.AES_CCM_64_64_128});
             if (!edhoc._fSymmetricSecret) {
-                edhoc._algSign = _SelectAlgorithm(msg[6], new CBORObject[] { AlgorithmValues.ECDSA_256});
+                edhoc._algSign = _SelectAlgorithm(msg[6], new CBORObject[] {AlgorithmValues.ECDSA_256});
+            }
+            else {
+                edhoc._kid[1] = msg[6];
             }
 
             edhoc._Keys[0] = OneKey.GenerateKey(null, edhoc._Keys[1][CoseKeyKeys.KeyType], "X25519" /*edhoc._Keys[1][CoseKeyParameterKeys.EC_Curve].AsString()*/);
