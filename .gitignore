@@ -23,6 +23,11 @@ bin
 obj
 packages
 
+# Emacs turds
+.#*
+*#
+*~
+
 # =========================
 # Operating System Files
 # =========================
@@ -51,3 +56,4 @@ packages
 Network Trash Folder
 Temporary Items
 .apdisk
+
