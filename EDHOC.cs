@@ -17,6 +17,7 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Tls;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Math.EC;
+using Org.BouncyCastle.Security;
 
 
 namespace Com.AugustCellars.CoAP.EDHOC
@@ -66,8 +67,8 @@ namespace Com.AugustCellars.CoAP.EDHOC
         protected OneKey _SigningKey;
         protected IDigest _MessageDigest = null;
         protected byte[] _LastMessageAuthenticator;
+        protected SecureRandom _random = new SecureRandom();
 
-        
 
         public byte[] KeyIdentifier {
             get { return _kid[1].GetByteString(); }
@@ -94,7 +95,11 @@ namespace Com.AugustCellars.CoAP.EDHOC
 
         public OneKey SigningKey {
             get { return _SigningKey; }
-            set { _SigningKey = value; }
+            set
+            {
+// M00TODO                if (!value.HasAlgorithm()) throw new Exception("Must specify an algorithm");
+                _SigningKey = value;
+            }
         }
 
         /// <summary>
@@ -361,8 +366,15 @@ namespace Com.AugustCellars.CoAP.EDHOC
             //  Save the items in the "Our" side of the arrays.
 
             _kid[0] = contextKey[CoseKeyKeys.KeyIdentifier];
+#if true
+            _SessionId[0] = new byte[2];
+            _random.NextBytes(_SessionId[0]);
+            _Nonce[0] =new byte[8];
+            _random.NextBytes(_Nonce[0]);
+#else
             _SessionId[0] = Encoding.UTF8.GetBytes("kid client");
             _Nonce[0] = Encoding.UTF8.GetBytes("Nonce Client");
+#endif
             _Keys[0] = OneKey.GenerateKey(null, GeneralValues.KeyType_OKP, "X25519");
         }
 
@@ -394,7 +406,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
             else {
                 obj = CBORObject.NewArray();                // SIG verify algorithms
                 obj.Add(AlgorithmValuesInt.ECDSA_256);
-                // obj.Add(AlgorithmValues.EdDSA);
+                obj.Add(AlgorithmValues.EdDSA);
                 msg.Add(obj);
 
                 msg.Add(obj);                               // SIG generate algorithms
@@ -437,7 +449,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
             }
             else {
                 algVerify = msg[7];                             // SIG_V
-                _algSign = _SelectAlgorithm(msg[8], new CBORObject[] { AlgorithmValues.ECDSA_256 });                        // SIG_U
+                _algSign = _SelectAlgorithm(msg[8], new CBORObject[] { _SigningKey[CoseKeyKeys.Algorithm] });                        // SIG_U
                 msgIndex = 9;
             }
 
@@ -578,8 +590,16 @@ namespace Com.AugustCellars.CoAP.EDHOC
             }
 
             edhoc._Keys[0] = OneKey.GenerateKey(null, edhoc._Keys[1][CoseKeyKeys.KeyType], "X25519" /*edhoc._Keys[1][CoseKeyParameterKeys.EC_Curve].AsString()*/);
+
+#if true
+            edhoc._SessionId[0] = new byte[2];
+            edhoc._random.NextBytes(edhoc._SessionId[0]);
+            edhoc._Nonce[0] =new byte[8];
+            edhoc._random.NextBytes(edhoc._Nonce[0]);
+#else
             edhoc._SessionId[0] = Encoding.UTF8.GetBytes("Kid Svr");
             edhoc._Nonce[0] = Encoding.UTF8.GetBytes("Server Nonce");
+#endif
 
             MessageList.Add(new ListKey(edhoc._SessionId[0]), edhoc);
 
@@ -628,6 +648,7 @@ namespace Com.AugustCellars.CoAP.EDHOC
                 Sign1Message sign1 = new Sign1Message(false, false);
                 sign1.SetContent(aad_2);
                 sign1.AddAttribute(HeaderKeys.KeyId, _SigningKey[CoseKeyKeys.KeyIdentifier], Attributes.UNPROTECTED);
+                sign1.AddAttribute(HeaderKeys.Algorithm, _algSign, Attributes.DO_NOT_SEND);
 
                 sign1.Sign(_SigningKey);
                 signResult = sign1.EncodeToBytes();
