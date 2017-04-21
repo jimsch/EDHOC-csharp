@@ -4,7 +4,7 @@
 language: csharp
 
 env:
-  - SLN=CoAP.NET40.2010.sln
+  - SLN=EDHOC.Net40.sln
     TARGET=NET40
     VERSION=Release
   - SLN=EDHOC.Net45.sln

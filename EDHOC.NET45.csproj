@@ -46,7 +46,7 @@
       <HintPath>.\packages\Com.AugustCellars.COSE.0.1.0\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp8\COSE.dll</HintPath>
     </Reference>
     <Reference Include="Com.AugustCellars.CoAP">
-      <HintPath>.\packages\Com.AugustCellars.CoAP.1.1.0\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CoAP.dll</HintPath>
+      <HintPath>.\packages\Com.AugustCellars.CoAP.1.1.1\lib\portable-net45+dnxcore50+netcore45+win+wpa81+wp80\CoAP.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
